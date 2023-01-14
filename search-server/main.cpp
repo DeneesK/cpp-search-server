@@ -118,14 +118,21 @@ private:
         return result_query;
     }
 
+    double CalculateIDF(const string& word) const {
+        int size = word_to_document_freqs_.at(word).size();
+        double idf = log(document_count_ * 1.0 / size);
+        return idf;
+    }
+
     vector<Document> FindAllDocuments(const Query& query_words) const {
         vector<Document> matched_documents;
         map<int, double> document_to_relevance;
         for (const string& word : query_words.plus_words) {
                 if(word_to_document_freqs_.count(word)){
+                    
+                    const double idf = CalculateIDF(word);
+
                     for(auto& [doc_id, tf]: word_to_document_freqs_.at(word)){
-                        int size = word_to_document_freqs_.at(word).size();      
-                        double idf = log(document_count_ * 1.0 / size);
                         document_to_relevance[doc_id] += (idf * tf);
                     }
                 }
