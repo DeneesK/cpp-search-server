@@ -87,6 +87,11 @@ public:
     }
 
 private:
+    struct QueryWord {
+        string data;
+        bool is_minus;
+        bool is_stop;
+    };
     map<string, map<int, double>> word_to_document_freqs_;
     set<string> stop_words_;
     int document_count_ = 0;
@@ -105,17 +110,28 @@ private:
         return words;
     }
 
+    QueryWord ParseQueryWord(string text) const {
+        bool is_minus = false;
+        if (text[0] == '-') {
+            is_minus = true;
+            text = text.substr(1);
+        }
+        return {text, is_minus, IsStopWord(text)};
+    }
+
     Query ParseQuery(const string& text) const {
-        set<string> query_words;
-        Query result_query;
-        for (const string& word : SplitIntoWordsNoStop(text)) {
-            if(word[0] == '-'){
-                result_query.minus_words.insert(word.substr(1));
-            }else {
-                result_query.plus_words.insert(word);
+        Query query;
+        for (const string& word : SplitIntoWords(text)) {
+            const QueryWord query_word = ParseQueryWord(word);
+            if (!query_word.is_stop) {
+                if (query_word.is_minus) {
+                    query.minus_words.insert(query_word.data);
+                } else {
+                    query.plus_words.insert(query_word.data);
+                }
             }
         }
-        return result_query;
+        return query;
     }
 
     double CalculateIDF(const string& word) const {
