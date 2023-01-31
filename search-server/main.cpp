@@ -409,7 +409,7 @@ void TestCalculateRating() {
 }
 
 void TestFindDocsWithStatus() {
-    const vector<int> ratings = { 1, 2, 3 };
+    const vector<int> ratings = {1, 2, 3};
     {
         SearchServer server;
         server.SetStopWords("in the"s);
@@ -472,7 +472,7 @@ void TestFindDocsWithStatus() {
 }
 
 void TestRelevanceCalculation() {
-    const vector<int> ratings = { 1, 2, 3 };
+    const vector<int> ratings = {1, 2, 3};
     SearchServer server;
     server.SetStopWords("in"s);
     server.AddDocument(0, "small cat in village"s, DocumentStatus::ACTUAL, ratings);
