@@ -58,6 +58,7 @@ void RunTestImpl(const F& func, const string& func_str) {
 #define RUN_TEST(func) RunTestImpl((func), #func)
 
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
+const double CORRECTION = 1e-6;
 
 string ReadLine() {
     string s;
@@ -131,7 +132,7 @@ public:
 
         sort(matched_documents.begin(), matched_documents.end(),
             [](const Document& lhs, const Document& rhs) {
-                if (abs(lhs.relevance - rhs.relevance) < 1e-6) {
+                if (abs(lhs.relevance - rhs.relevance) < CORRECTION) {
                     return lhs.rating > rhs.rating;
                 }
                 else {
@@ -316,7 +317,7 @@ void TestExcludeStopWordsFromAddedDocumentContent() {
 
 // Поддержка минус-слов. Документы, содержащие минус-слова поискового запроса, не должны включаться в результаты поиска
 void TestExcludeDocsContainsMinusWords() {
-    const vector<int> ratings = { 1, 2, 3 };
+    const vector<int> ratings = {1, 2, 3};
     SearchServer server;
 
     server.SetStopWords("in the"s);
@@ -330,7 +331,7 @@ void TestExcludeDocsContainsMinusWords() {
 // При матчинге документа по поисковому запросу должны быть возвращены все слова из поискового запроса, присутствующие в документе. 
 // Если есть соответствие хотя бы по одному минус-слову, должен возвращаться пустой список слов.
 void TestDocsMatching() {
-    const vector<int> ratings = { 1, 2, 3 };
+    const vector<int> ratings = {1, 2, 3};
     {   
         const string content = "-big cat in the city"s;
         SearchServer server;
@@ -352,44 +353,132 @@ void TestDocsMatching() {
 
 // Сортировка найденных документов по релевантности. Возвращаемые при поиске документов результаты должны 
 // быть отсортированы в порядке убывания релевантности.
-void TestDocsSortByRelavant(){
-    const vector<int> ratings = { 1, 2, 3 };
+void TestDocsSortByRelavance() {
+    const vector<int> ratings = {1, 2, 3};
     SearchServer server;
     server.SetStopWords("in the"s);
-    server.AddDocument(0, "small cat in the village"s, DocumentStatus::ACTUAL, ratings);
-    server.AddDocument(1, "big cat in the city"s, DocumentStatus::ACTUAL, ratings);
-    vector<Document> documents = server.FindTopDocuments("big cat in the city"s);
-    ASSERT_EQUAL(documents[0].id, 1);  
+    server.AddDocument(0, "big cat in the village"s, DocumentStatus::ACTUAL, ratings);
+    server.AddDocument(1, "big grey cat in the city"s, DocumentStatus::ACTUAL, ratings);
+    server.AddDocument(2, "big cat in the city"s, DocumentStatus::ACTUAL, ratings);
+    server.AddDocument(3, "grey cat in the town"s, DocumentStatus::ACTUAL, ratings);
+    vector<Document> documents = server.FindTopDocuments("big grey cat in the city"s);
+    ASSERT_EQUAL(documents[0].id, 1);
+    ASSERT(documents[1].relevance < documents[0].relevance);
+    ASSERT(documents[2].relevance < documents[1].relevance);
+    ASSERT(documents[3].relevance < documents[2].relevance);   
 }
 
 // Вычисление рейтинга документов. Рейтинг добавленного документа равен среднему арифметическому оценок документа.
-void TestCalculateRating(){
-    const vector<int> ratings = { 1, 2, 3 };
-    SearchServer server;
-    server.SetStopWords("in the"s);
-    server.AddDocument(0, "cat in the village"s, DocumentStatus::ACTUAL, ratings);
-    vector<Document> documents = server.FindTopDocuments("cat in the city"s);
-    ASSERT_EQUAL(documents[0].rating, 2);
+void TestCalculateRating() {
+    {
+        const vector<int> ratings = {1, 2, 3};
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(0, "cat in the village"s, DocumentStatus::ACTUAL, ratings);
+        vector<Document> documents = server.FindTopDocuments("cat in the city"s);
+        ASSERT_EQUAL(documents[0].rating, 2);
+    }
+
+    {
+        const vector<int> ratings = {0, 0};
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(0, "cat in the village"s, DocumentStatus::ACTUAL, ratings);
+        vector<Document> documents = server.FindTopDocuments("cat in the city"s);
+        ASSERT_EQUAL(documents[0].rating, 0);
+    }
+
+    {
+        const vector<int> ratings = {-1, -2, -3};
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(0, "cat in the village"s, DocumentStatus::ACTUAL, ratings);
+        vector<Document> documents = server.FindTopDocuments("cat in the city"s);
+        ASSERT_EQUAL(documents[0].rating, -2);
+    }
+
+    {
+        const vector<int> ratings = {-1, -1, 5};
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(0, "cat in the village"s, DocumentStatus::ACTUAL, ratings);
+        vector<Document> documents = server.FindTopDocuments("cat in the city"s);
+        ASSERT_EQUAL(documents[0].rating, 1);
+    }
+
 }
 
 void TestFindDocsWithStatus(){
     const vector<int> ratings = { 1, 2, 3 };
-    SearchServer server;
-    server.SetStopWords("in the"s);
-    server.AddDocument(0, "small cat in the village"s, DocumentStatus::ACTUAL, ratings);
-    server.AddDocument(1, "big cat in the city"s, DocumentStatus::BANNED, ratings);
-    vector<Document> documents = server.FindTopDocuments("big cat in the city"s, DocumentStatus::BANNED);
-    ASSERT_EQUAL(documents[0].id, 1);     
+    {
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(0, "big cat in the village"s, DocumentStatus::ACTUAL, ratings);
+        server.AddDocument(1, "big cat in the city"s, DocumentStatus::IRRELEVANT, ratings);
+        server.AddDocument(2, "big cat in the city"s, DocumentStatus::BANNED, ratings);
+        server.AddDocument(3, "big cat in the city"s, DocumentStatus::REMOVED, ratings); 
+        vector<Document> documents = server.FindTopDocuments("big cat in the city"s);
+        ASSERT_EQUAL(documents[0].id, 0);
+        ASSERT_EQUAL(documents.size(), 1u); 
+    }
+
+    {
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(0, "big cat in the village"s, DocumentStatus::ACTUAL, ratings);
+        server.AddDocument(1, "big cat in the city"s, DocumentStatus::IRRELEVANT, ratings);
+        server.AddDocument(2, "big cat in the city"s, DocumentStatus::BANNED, ratings);
+        server.AddDocument(3, "big cat in the city"s, DocumentStatus::REMOVED, ratings); 
+        vector<Document> documents = server.FindTopDocuments("big cat in the city"s, DocumentStatus::ACTUAL);
+        ASSERT_EQUAL(documents[0].id, 0);
+        ASSERT_EQUAL(documents.size(), 1u); 
+    }
+
+    {
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(0, "big cat in the village"s, DocumentStatus::ACTUAL, ratings);
+        server.AddDocument(1, "big cat in the city"s, DocumentStatus::IRRELEVANT, ratings);
+        server.AddDocument(2, "big cat in the city"s, DocumentStatus::BANNED, ratings);
+        server.AddDocument(3, "big cat in the city"s, DocumentStatus::REMOVED, ratings); 
+        vector<Document> documents = server.FindTopDocuments("big cat in the city"s, DocumentStatus::BANNED);
+        ASSERT_EQUAL(documents[0].id, 2);
+        ASSERT_EQUAL(documents.size(), 1u);  
+    }
+
+    {
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(0, "big cat in the village"s, DocumentStatus::ACTUAL, ratings);
+        server.AddDocument(1, "big cat in the city"s, DocumentStatus::IRRELEVANT, ratings);
+        server.AddDocument(2, "big cat in the city"s, DocumentStatus::BANNED, ratings);
+        server.AddDocument(3, "big cat in the city"s, DocumentStatus::REMOVED, ratings);       
+        vector<Document> documents = server.FindTopDocuments("big cat in the city"s, DocumentStatus::IRRELEVANT);
+        ASSERT_EQUAL(documents[0].id, 1);
+        ASSERT_EQUAL(documents.size(), 1u);   
+    }
+
+    {
+        SearchServer server;
+        server.SetStopWords("in the"s);
+        server.AddDocument(0, "big cat in the village"s, DocumentStatus::ACTUAL, ratings);
+        server.AddDocument(1, "big cat in the city"s, DocumentStatus::IRRELEVANT, ratings);
+        server.AddDocument(2, "big cat in the city"s, DocumentStatus::BANNED, ratings);
+        server.AddDocument(3, "big cat in the city"s, DocumentStatus::REMOVED, ratings);       
+        vector<Document> documents = server.FindTopDocuments("big cat in the city"s, DocumentStatus::REMOVED);
+        ASSERT_EQUAL(documents[0].id, 3);
+        ASSERT_EQUAL(documents.size(), 1u);   
+    }   
 }
 
 void TestRelevanceCalculation(){
     const vector<int> ratings = { 1, 2, 3 };
     SearchServer server;
     server.SetStopWords("in"s);
-    server.AddDocument(0, "small cat invillage"s, DocumentStatus::ACTUAL, ratings);
+    server.AddDocument(0, "small cat in village"s, DocumentStatus::ACTUAL, ratings);
     server.AddDocument(1, "big cat in city"s, DocumentStatus::ACTUAL, ratings);
     vector<Document> docs = server.FindTopDocuments("big cat city"s);
-    ASSERT(abs(docs[0].relevance - 0.462098) < 1e-6);
+    ASSERT(abs(docs[0].relevance - 0.462098) < CORRECTION);
 }
 
 // Функция TestSearchServer является точкой входа для запуска тестов
@@ -397,7 +486,7 @@ void TestSearchServer() {
     RUN_TEST(TestExcludeStopWordsFromAddedDocumentContent);
     RUN_TEST(TestExcludeDocsContainsMinusWords);
     RUN_TEST(TestDocsMatching);
-    RUN_TEST(TestDocsSortByRelavant);
+    RUN_TEST(TestDocsSortByRelavance);
     RUN_TEST(TestCalculateRating);
     RUN_TEST(TestFindDocsWithStatus);
     RUN_TEST(TestRelevanceCalculation);
