@@ -353,7 +353,7 @@ void TestDocsMatching() {
 
 // Сортировка найденных документов по релевантности. Возвращаемые при поиске документов результаты должны 
 // быть отсортированы в порядке убывания релевантности.
-void TestDocsSortByRelavance() {
+void TestDocsSortByRelevance() {
     const vector<int> ratings = {1, 2, 3};
     SearchServer server;
     server.SetStopWords("in the"s);
@@ -408,7 +408,7 @@ void TestCalculateRating() {
 
 }
 
-void TestFindDocsWithStatus(){
+void TestFindDocsWithStatus() {
     const vector<int> ratings = { 1, 2, 3 };
     {
         SearchServer server;
@@ -471,7 +471,7 @@ void TestFindDocsWithStatus(){
     }   
 }
 
-void TestRelevanceCalculation(){
+void TestRelevanceCalculation() {
     const vector<int> ratings = { 1, 2, 3 };
     SearchServer server;
     server.SetStopWords("in"s);
@@ -486,7 +486,7 @@ void TestSearchServer() {
     RUN_TEST(TestExcludeStopWordsFromAddedDocumentContent);
     RUN_TEST(TestExcludeDocsContainsMinusWords);
     RUN_TEST(TestDocsMatching);
-    RUN_TEST(TestDocsSortByRelavance);
+    RUN_TEST(TestDocsSortByRelevance);
     RUN_TEST(TestCalculateRating);
     RUN_TEST(TestFindDocsWithStatus);
     RUN_TEST(TestRelevanceCalculation);
