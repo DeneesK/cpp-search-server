@@ -85,21 +85,14 @@ public:
     template <typename StringContainer>
     explicit SearchServer(const StringContainer& stop_words)
         : stop_words_(MakeUniqueNonEmptyStrings(stop_words)) {
-            for(const auto& word: stop_words){
-                if(!IsValidWord(word)){
-                    throw invalid_argument("stop words contain unavailable charactes");
-                }
-            }
+        if(!(all_of(stop_words.begin(), stop_words.end(), IsValidWord))){
+            throw invalid_argument("stop words contain unavailable charactes");
+        }
     }
 
     explicit SearchServer(const string& stop_words_text)
         : SearchServer(
             SplitIntoWords(stop_words_text)) {
-        for(const auto& word: SplitIntoWords(stop_words_text)){
-            if(!IsValidWord(word)){
-                throw invalid_argument("stop words contain unavailable charactes");
-            }
-        }
     }
 
     void AddDocument(int document_id, const string& document, DocumentStatus status,
@@ -125,12 +118,7 @@ public:
     vector<Document> FindTopDocuments(const string& raw_query,
                                       DocumentPredicate document_predicate) const {
         const Query query = ParseQuery(raw_query);
-        if(!isValidQuery(query)){
-            throw invalid_argument("unavailable query");
-        }
-
         auto matched_documents = FindAllDocuments(query, document_predicate);
-
         sort(matched_documents.begin(), matched_documents.end(),
              [](const Document& lhs, const Document& rhs) {
                  if (abs(lhs.relevance - rhs.relevance) < CORRECTION) {
@@ -162,9 +150,6 @@ public:
 
     tuple<vector<string>, DocumentStatus> MatchDocument(const string& raw_query, int document_id) const {
         const Query query = ParseQuery(raw_query);
-        if(!isValidQuery(query)){
-            throw invalid_argument("unavailable query");
-        }
         vector<string> matched_words;
         for (const string& word : query.plus_words) {
             if (word_to_document_freqs_.count(word) == 0) {
@@ -187,10 +172,7 @@ public:
     }
 
     int GetDocumentId(int index) const {
-        if(index < 0 || GetDocumentCount() < index){
-            throw out_of_range("index out of range");
-        }
-        return ids_[index];
+        return ids_.at(index);
     }
 
 private:
@@ -219,25 +201,14 @@ private:
         return none_of(word.begin(), word.end(), [](char c) {return c >= '\0' && c < ' ';});
     }
 
-    bool isValidQuery(const Query& query) const {
-        if(query.minus_words.count(""s)){
-            return false;
-        }
-        for(const auto& word: query.minus_words){
-            if(!IsValidWord(word) || word.substr(0, 1) == "-"s){
-                return false;
-            }
-        }
-        for(const auto& word: query.plus_words){
-            if(!IsValidWord(word)){
-                return false;
-            }
-        }
-        return true;
-    }
-
     bool IsStopWord(const string& word) const {
         return stop_words_.count(word) > 0;
+    }
+
+    void IsValidQueryWord(const QueryWord& query_word) const {
+        if (!IsValidWord(query_word.data) || query_word.data.empty() || query_word.data[0] == '-'){
+                throw invalid_argument("query contains anvailable characters");
+            }
     }
 
     vector<string> SplitIntoWordsNoStop(const string& text) const {
@@ -275,6 +246,7 @@ private:
         Query query;
         for (const string& word : SplitIntoWords(text)) {
             const QueryWord query_word = ParseQueryWord(word);
+            IsValidQueryWord(query_word);
             if (!query_word.is_stop) {
                 if (query_word.is_minus) {
                     query.minus_words.insert(query_word.data);
