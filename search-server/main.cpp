@@ -205,8 +205,8 @@ private:
         return stop_words_.count(word) > 0;
     }
 
-    void IsValidQueryWord(const QueryWord& query_word) const {
-        if (!IsValidWord(query_word.data) || query_word.data.empty() || query_word.data[0] == '-'){
+    void IsValidQueryWord(const string& word) const {
+        if (!IsValidWord(word) || word.empty() || word[0] == '-'){
                 throw invalid_argument("query contains anvailable characters");
             }
     }
@@ -246,7 +246,7 @@ private:
         Query query;
         for (const string& word : SplitIntoWords(text)) {
             const QueryWord query_word = ParseQueryWord(word);
-            IsValidQueryWord(query_word);
+            IsValidQueryWord(query_word.data);
             if (!query_word.is_stop) {
                 if (query_word.is_minus) {
                     query.minus_words.insert(query_word.data);
