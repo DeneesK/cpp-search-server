@@ -20,7 +20,10 @@ void SearchServer::AddDocument(int document_id, const string& document, Document
     }
     for (const string& word : words) {
         word_to_document_freqs_[word][document_id] += inv_word_count;
+        id_to_string_freq_[document_id][word] += inv_word_count;
     }
+    std::set<std::string> w(words.begin(), words.end());
+    id_words[document_id] = w;
     documents_.emplace(document_id, DocumentData{ComputeAverageRating(ratings), status});
     ids_.push_back(document_id);
 }
@@ -61,10 +64,6 @@ tuple<vector<string>, DocumentStatus> SearchServer::MatchDocument(const string& 
         }
     }
     return tuple(matched_words, documents_.at(document_id).status);
-}
-
-int SearchServer::GetDocumentId(int index) const {
-    return ids_.at(index);
 }
 
 bool SearchServer::IsValidWord(const string& word)  {
@@ -132,4 +131,49 @@ SearchServer::Query SearchServer::ParseQuery(const string& text) const {
 
 double SearchServer::ComputeWordInverseDocumentFreq(const string& word) const {
     return log(GetDocumentCount() * 1.0 / word_to_document_freqs_.at(word).size());
+}
+
+vector<int>::const_iterator SearchServer::begin() const {
+    return ids_.begin();
+}
+
+vector<int>::const_iterator SearchServer::end() const {
+    return ids_.end();
+}
+
+const map<string, double>& SearchServer::GetWordFrequencies(int document_id) const {
+    map<string, double> res;
+    if(id_to_string_freq_.count(document_id)) {
+        res = id_to_string_freq_.at(document_id);
+    }
+    return res;
+}
+
+void SearchServer::RemoveDocument(int document_id) {
+    for(int i = 0; i < ids_.size(); ++i) {
+        if(ids_[i] == document_id) {
+            ids_.erase(ids_.begin() + i);
+            break;
+        }
+    }
+
+    documents_.erase(document_id);
+
+    id_to_string_freq_.erase(document_id);
+
+    for(auto [word, container]: word_to_document_freqs_) {
+        if(container.count(document_id)) {
+            container.erase(document_id);
+            break;
+        }
+    }
+
+}
+
+set<string> SearchServer::GetWordsById(int doc_id) const {
+    set<string> res;
+    if(id_words.count(doc_id)) {
+        res = id_words.at(doc_id);
+    }
+    return res;
 }

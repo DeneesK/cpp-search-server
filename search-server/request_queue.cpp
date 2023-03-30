@@ -4,8 +4,9 @@ using namespace std;
 
 RequestQueue::RequestQueue(const SearchServer& search_server)
     : search_server_(search_server)
-    , empty_results(0)
-    , current_time_(0) {
+    , current_time_(0)
+    , empty_results(0) 
+{
 }
 
 vector<Document> RequestQueue::AddFindRequest(const string& raw_query, DocumentStatus status) {
