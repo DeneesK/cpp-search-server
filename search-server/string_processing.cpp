@@ -1,23 +1,30 @@
 #include "string_processing.h"
 
+#include <algorithm>
+
 using namespace std;
 
-vector<string> SplitIntoWords(const string& text) {
-    vector<string> words;
-    string word;
-    for (const char c : text) {
-        if (c == ' ') {
-            if (!word.empty()) {
-                words.push_back(word);
-                word.clear();
-            }
-        } else {
-            word += c;
-        }
-    }
-    if (!word.empty()) {
-        words.push_back(word);
-    }
+vector<string_view> SplitIntoWords(string_view text) {
+    int i = 0;
+    int len = 0;
+    vector<string_view> words;
+    std::for_each(text.begin(), text.end(),
+        [&](const char& c) {
+            if (c == ' ') {
+                if (len) {
+                    words.push_back(text.substr(i, len));
+                    i += len;
+                    len = 0;
+                }
+                ++i;
 
+            } else {
+                ++len;
+            }
+        });
+    
+    if (len) {
+        words.push_back(text.substr(i, len));
+    } 
     return words;
 }
