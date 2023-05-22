@@ -25,7 +25,7 @@ void SearchServer::AddDocument(int document_id, const string_view document, Docu
         word_to_document_freqs_[static_cast<string>(word)][document_id] += inv_word_count;
         id_to_string_freq_[document_id][static_cast<string>(word)] += inv_word_count;
     }
-    set<string, less<>> w(words.begin(), words.end());
+    set<string_view> w(words.begin(), words.end());
     id_words[document_id] = w;
     documents_.emplace(document_id, DocumentData{ComputeAverageRating(ratings), status});
     ids_.insert(document_id);
@@ -46,7 +46,7 @@ int SearchServer::GetDocumentCount() const {
     return documents_.size();
 }
 
-tuple<vector<string_view>, DocumentStatus> SearchServer::MatchDocument(string_view raw_query, int document_id) const {
+words_docstatus SearchServer::MatchDocument(string_view raw_query, int document_id) const {
     if (!documents_.count(document_id)) {
         throw out_of_range("");
     }
@@ -73,12 +73,12 @@ tuple<vector<string_view>, DocumentStatus> SearchServer::MatchDocument(string_vi
     return tuple(matched_words, documents_.at(document_id).status);
 }
 
-tuple<vector<string_view>, DocumentStatus> SearchServer::MatchDocument(execution::sequenced_policy policy, 
+words_docstatus SearchServer::MatchDocument(execution::sequenced_policy policy, 
                                                                   string_view raw_query, int document_id) const {
     return MatchDocument(raw_query, document_id);
 }
 
-tuple<vector<string_view>, DocumentStatus> SearchServer::MatchDocument(execution::parallel_policy policy, 
+words_docstatus SearchServer::MatchDocument(execution::parallel_policy policy, 
                                                                   string_view raw_query, int document_id) const {
     if (!documents_.count(document_id)) {
         throw out_of_range("");
@@ -102,8 +102,15 @@ tuple<vector<string_view>, DocumentStatus> SearchServer::MatchDocument(execution
     // copy_if(policy, query.plus_words.begin(), plus_words_end, back_inserter(matched_words),
     //         [&](const string& word){return words.count(word);});
 
-    for_each(query.plus_words.begin(), plus_words_end, [&](const auto& word)
-                    {if(words.count(word)) {matched_words.push_back(word);};});
+    mutex m;
+
+    for_each(policy, query.plus_words.begin(), plus_words_end, [&](const auto& word)
+                    {if(words.count(word)) {
+                        lock_guard guard(m);
+                        matched_words.push_back(word);
+                        };
+                    }
+            );
 
     return tuple(matched_words, documents_.at(document_id).status);
 }
@@ -160,7 +167,7 @@ SearchServer::QueryWord SearchServer::ParseQueryWord(string_view& text) const {
     return { text, is_minus, IsStopWord(text) };
 }
 
-SearchServer::Query SearchServer::ParseQuery(string_view& text, bool unique_) const {
+SearchServer::Query SearchServer::ParseQuery(string_view text, bool unique_) const {
     Query query;
     auto words = SplitIntoWords(text);
     query.plus_words.reserve(words.size());
@@ -202,14 +209,10 @@ set<int>::const_iterator SearchServer::end() const {
 }
 
 const map<string_view, double>& SearchServer::GetWordFrequencies(int document_id) const {
-    static map<string_view, double> res;
     if(id_to_string_freq_.count(document_id)) {
-        auto word_freq = id_to_string_freq_.at(document_id);
-        for(auto [k, v]: word_freq){
-            res[static_cast<string_view>(k)] = v;
-        } 
+        return id_to_string_freq_.at(document_id);
     }
-    return res;
+    return {};
 }
 
 void SearchServer::RemoveDocument(execution::sequenced_policy policy, int document_id) {
@@ -244,7 +247,7 @@ void SearchServer::RemoveDocument(int document_id) {
         return;
         }
 
-    vector<string> words;
+    vector<string_view> words;
 
     auto words_for_erase = id_to_string_freq_.at(document_id); 
 
@@ -253,7 +256,7 @@ void SearchServer::RemoveDocument(int document_id) {
     }
 
     for (auto word : words) {
-        word_to_document_freqs_.at(word).erase(document_id);
+        word_to_document_freqs_.at(string(word)).erase(document_id);
     }
 
     id_to_string_freq_.erase(document_id);
@@ -262,10 +265,9 @@ void SearchServer::RemoveDocument(int document_id) {
     id_words.erase(document_id);
 }
 
-set<string, less<>> SearchServer::GetWordsById(int doc_id) const {
-    static set<string, less<>> res;
+set<string_view> SearchServer::GetWordsById(int doc_id) const {
     if(id_words.count(doc_id)) {
-        res = id_words.at(doc_id);
+        return id_words.at(doc_id);
     }
-    return res;
+    return {};
 }
